@@ -25,9 +25,9 @@ export async function GET(request) {
   await connectDB();
 
   // KST 기준 오늘 날짜 (YYYYMMDD) — 테스트 시 아래 주석 해제
-  // const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  // const todayYMD = kstNow.toISOString().split('T')[0].replace(/-/g, '');
-  const todayYMD = '20260406'; // 날짜 고정 테스트용
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const todayYMD = kstNow.toISOString().split('T')[0].replace(/-/g, '');
+  // const todayYMD = '20260406'; // 날짜 고정 테스트용
 
   const schools = await School.find({}, 'name atptCode schoolCode').lean();
 
