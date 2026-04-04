@@ -1,0 +1,16 @@
+# Next.js
+.next/
+out/
+
+# 의존성
+node_modules/
+
+# 환경변수 (절대 커밋하지 않음)
+.env.local
+.env*.local
+
+# OS
+.DS_Store
+
+# 로그
+npm-debug.log*

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>2025 전국 대학교 지도</title>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100%; height: 100vh; }
+        
+        .info-window {
+            padding: 10px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: 'Malgun Gothic', sans-serif;
+            font-size: 12px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            min-width: 180px;
+        }
+        .info-title {
+            font-weight: bold;
+            font-size: 14px;
+            color: #2e5f9e;
+            margin-bottom: 5px;
+        }
+        .info-body {
+            line-height: 1.6;
+        }
+        .info-link {
+            display: inline-block;
+            margin-top: 5px;
+            color: #0066cc;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=49f5b43fac7140245ed3b4ab86718c4f&autoload=false"></script>
+
+<script>
+    // 외부 JSON 파일에서 데이터를 불러옵니다.
+    fetch('universities.json')
+        .then(response => response.json())
+        .then(universityData => {
+            kakao.maps.load(function() {
+                const mapContainer = document.getElementById('map'); 
+                const mapOption = { 
+                    center: new kakao.maps.LatLng(36.5, 127.5),
+                    level: 11 
+                };
+
+                const map = new kakao.maps.Map(mapContainer, mapOption);
+
+                universityData.forEach(univ => {
+                    if (!univ.lat || !univ.lng) return;
+
+                    const markerPosition = new kakao.maps.LatLng(univ.lat, univ.lng);
+
+                    // 마커 생성
+                    const marker = new kakao.maps.Marker({
+                        position: markerPosition,
+                        map: map
+                    });
+
+                    // 인포윈도우 내용 구성
+                    const content = `
+                        <div class="info-window">
+                            <div class="info-title">${univ.name}</div>
+                            <div class="info-body">
+                                <div>주소: ${univ.addr}</div>
+                                <div>전화: ${univ.tel || '정보없음'}</div>
+                                <a href="${univ.web && univ.web.startsWith('http') ? univ.web : 'http://' + (univ.web || '')}" target="_blank" class="info-link">홈페이지 방문</a>
+                            </div>
+                        </div>
+                    `;
+
+                    const infowindow = new kakao.maps.InfoWindow({
+                        content: content,
+                        removable: true
+                    });
+
+                    // 마커 클릭 시 인포윈도우 토글 표시
+                    let isOpen = false;
+                    kakao.maps.event.addListener(marker, 'click', function() {
+                        if (isOpen) {
+                            infowindow.close();
+                        } else {
+                            infowindow.open(map, marker);
+                        }
+                        isOpen = !isOpen;
+                    });
+
+                    // 인포윈도우의 닫기 버튼(X)을 눌렀을 때 상태 동기화
+                    kakao.maps.event.addListener(infowindow, 'close', function() {
+                        isOpen = false;
+                    });
+                });
+            });
+        })
+        .catch(error => console.error('데이터를 불러오는 중 오류 발생:', error));
+</script>
+
+</body>
+</html>
+
+                window.open(url, '_blank');
+            });
+        });
+    });
+</script>
+</body>
+</html>
