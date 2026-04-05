@@ -32,6 +32,21 @@ function makeMarkerSVG(color) {
   </svg>`;
 }
 
+function makeMySchoolSVG() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <path fill="#f59e0b" stroke="white" stroke-width="1.5"
+      d="M14 0C6.27 0 0 6.27 0 14c0 9.9 14 22 14 22S28 23.9 28 14C28 6.27 21.73 0 14 0z"/>
+    <text x="14" y="20" text-anchor="middle" font-size="14" fill="white" font-weight="bold">★</text>
+  </svg>`;
+}
+
+function makeLocationSVG() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="9" fill="#2563eb" fill-opacity="0.2"/>
+    <circle cx="10" cy="10" r="5" fill="#2563eb" stroke="white" stroke-width="2"/>
+  </svg>`;
+}
+
 // ─── 컴포넌트 ───────────────────────────────────────────────────────────────
 export default function SchoolMapPage() {
   const mapContainerRef = useRef(null);
@@ -49,6 +64,19 @@ export default function SchoolMapPage() {
   const [loadError, setLoadError]         = useState(null);
   const [weatherData, setWeatherData]     = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [mySchoolCode, setMySchoolCode]   = useState(null);
+  const mySchoolCodeRef   = useRef(null);
+  const locationMarkerRef = useRef(null);
+  const [isMobile, setIsMobile]           = useState(false);
+
+  // ── 0) 모바일 감지 ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    setIsMobile(mq.matches);
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // ── 1) 카카오맵 SDK 로드 + 학교 데이터 fetch 병렬 처리 ──────────────────
   useEffect(() => {
@@ -81,6 +109,12 @@ export default function SchoolMapPage() {
         if (!mounted) return;
         schoolsRef.current = schools;
         setTotalCount(schools.length);
+        // 우리 학교 localStorage에서 불러오기 (initMap 전에 ref 세팅)
+        const savedCode = localStorage.getItem('mySchoolCode');
+        if (savedCode) {
+          mySchoolCodeRef.current = savedCode;
+          setMySchoolCode(savedCode);
+        }
         initMap(schools);
         setMapsReady(true);
         setIsLoading(false);
@@ -117,6 +151,49 @@ export default function SchoolMapPage() {
 
     const count = renderMarkers(schools);
     setShownCount(count);
+
+    // 현재 위치 표시 (비동기)
+    initGeolocation(map);
+
+    // 우리 학교 자동 오픈
+    if (mySchoolCodeRef.current) {
+      const myS = schools.find((s) => String(s.schoolCode) === String(mySchoolCodeRef.current));
+      if (myS && !isNaN(myS.lat)) {
+        map.setCenter(new kakao.maps.LatLng(Number(myS.lat), Number(myS.lng)));
+        map.setLevel(5);
+        setSelectedSchool(myS);
+      }
+    }
+  }
+
+  // ── 현재 위치 마커 ─────────────────────────────────────────────────────
+  function initGeolocation(map) {
+    if (!navigator?.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords: { latitude: lat, longitude: lng } }) => {
+        // 우리 학교 미등록 시에만 현재 위치로 이동
+        if (!mySchoolCodeRef.current) {
+          map.setCenter(new kakao.maps.LatLng(lat, lng));
+          map.setLevel(7);
+        }
+        // 현재 위치 마커
+        if (locationMarkerRef.current) locationMarkerRef.current.setMap(null);
+        const locMarker = new kakao.maps.Marker({
+          position: new kakao.maps.LatLng(lat, lng),
+          image: new kakao.maps.MarkerImage(
+            'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(makeLocationSVG()),
+            new kakao.maps.Size(20, 20),
+            { offset: new kakao.maps.Point(10, 10) },
+          ),
+          title: '현재 위치',
+          zIndex: 5,
+        });
+        locMarker.setMap(map);
+        locationMarkerRef.current = locMarker;
+      },
+      () => {}, // 거부/오류 시 무시
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
   }
 
   // ── 3) 마커 렌더링 (필터 적용) ───────────────────────────────────────────
@@ -127,10 +204,13 @@ export default function SchoolMapPage() {
     const markers = schools
       .filter((s) => !isNaN(s.lat) && !isNaN(s.lng))
       .map((school) => {
+        const isMy = mySchoolCodeRef.current && String(school.schoolCode) === String(mySchoolCodeRef.current);
         const img = new kakao.maps.MarkerImage(
-          'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(makeMarkerSVG(getTypeColor(school.type))),
-          new kakao.maps.Size(22, 30),
-          { offset: new kakao.maps.Point(11, 30) },
+          'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+            isMy ? makeMySchoolSVG() : makeMarkerSVG(getTypeColor(school.type))
+          ),
+          isMy ? new kakao.maps.Size(28, 36) : new kakao.maps.Size(22, 30),
+          { offset: isMy ? new kakao.maps.Point(14, 36) : new kakao.maps.Point(11, 30) },
         );
         const marker = new kakao.maps.Marker({
           position: new kakao.maps.LatLng(Number(school.lat), Number(school.lng)),
@@ -161,6 +241,15 @@ export default function SchoolMapPage() {
     return () => { cancelled = true; };
   }, [selectedSchool]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── 우리 학교 등록/해제 ────────────────────────────────────────────────
+  function handleMySchool(school) {
+    const newCode = String(mySchoolCode) === String(school.schoolCode) ? null : String(school.schoolCode);
+    mySchoolCodeRef.current = newCode;
+    setMySchoolCode(newCode);
+    if (newCode) localStorage.setItem('mySchoolCode', newCode);
+    else localStorage.removeItem('mySchoolCode');
+  }
+
   // ── 5) 검색·필터 변경 시 마커 재렌더링 ──────────────────────────────────
   useEffect(() => {
     if (!mapsReady) return;
@@ -183,7 +272,7 @@ export default function SchoolMapPage() {
       mapRef.current.setLevel(5);
       setSelectedSchool(filtered[0]);
     }
-  }, [mapsReady, searchQuery, regionFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapsReady, searchQuery, regionFilter, mySchoolCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── KST 오늘 날짜 문자열 ────────────────────────────────────────────────
   const todayLabel = new Date(Date.now() + 9 * 60 * 60 * 1000)
@@ -194,39 +283,41 @@ export default function SchoolMapPage() {
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
 
       {/* ── 상단 바 ───────────────────────────────────────────────────── */}
-      <div style={styles.topBar}>
-        {/* 탭 네비게이션 */}
-        <nav style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <span style={styles.logo}>🏫 고등학교</span>
-          <Link href="/universities" style={styles.tabInactive}>🎓 대학교</Link>
-        </nav>
-
-        <input
-          type="text"
-          placeholder="학교명 검색..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={styles.searchInput}
-        />
-
-        <select
-          value={regionFilter}
-          onChange={(e) => setRegionFilter(e.target.value)}
-          style={styles.select}
-        >
-          {REGIONS.map((r) => <option key={r}>{r}</option>)}
-        </select>
-
-        <span style={styles.countBadge}>
-          {shownCount.toLocaleString()} / {totalCount.toLocaleString()}개
-        </span>
+      <div style={isMobile ? styles.topBarMobile : styles.topBar}>
+        {/* 1행: 탭 네비게이션 + 카운트 */}
+        <div style={styles.topRow}>
+          <nav style={{ display: 'flex', gap: 4 }}>
+            <span style={styles.logo}>🏫 고등학교</span>
+            <Link href="/universities" style={styles.tabInactive}>🎓 대학교</Link>
+          </nav>
+          <span style={styles.countBadge}>
+            {shownCount.toLocaleString()} / {totalCount.toLocaleString()}개
+          </span>
+        </div>
+        {/* 2행: 검색 + 지역 필터 */}
+        <div style={styles.searchRow}>
+          <input
+            type="text"
+            placeholder="학교명 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={styles.searchInput}
+          />
+          <select
+            value={regionFilter}
+            onChange={(e) => setRegionFilter(e.target.value)}
+            style={styles.select}
+          >
+            {REGIONS.map((r) => <option key={r}>{r}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* ── 지도 컨테이너 ────────────────────────────────────────────── */}
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
       {/* ── 범례 ─────────────────────────────────────────────────────── */}
-      {mapsReady && (
+      {mapsReady && !isMobile && (
         <div style={styles.legend}>
           {Object.entries(TYPE_COLORS).map(([type, color]) => (
             <div key={type} style={styles.legendRow}>
@@ -252,10 +343,21 @@ export default function SchoolMapPage() {
 
       {/* ── 학교 정보 패널 ───────────────────────────────────────────── */}
       {selectedSchool && (
-        <div style={styles.panel}>
+        <div style={isMobile ? styles.panelMobile : styles.panel}>
+          {isMobile && <div style={styles.dragHandle} />}
           <button onClick={() => setSelectedSchool(null)} style={styles.closeBtn}>✕</button>
 
           <h2 style={styles.panelTitle}>{selectedSchool.name}</h2>
+
+          {/* 우리 학교 등록/해제 */}
+          <button
+            onClick={() => handleMySchool(selectedSchool)}
+            style={String(mySchoolCode) === String(selectedSchool.schoolCode)
+              ? styles.mySchoolBtnActive : styles.mySchoolBtn}
+          >
+            {String(mySchoolCode) === String(selectedSchool.schoolCode)
+              ? '⭐ 우리 학교' : '☆ 우리 학교 등록'}
+          </button>
 
           {/* 태그 */}
           <div style={styles.tagRow}>
@@ -452,35 +554,51 @@ function InfoRow({ icon, label, value, children }) {
 const styles = {
   topBar: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-    display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+    display: 'flex', flexDirection: 'column', gap: 8,
     padding: '10px 16px',
     background: 'white',
     boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
   },
+  topBarMobile: {
+    position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10,
+    display: 'flex', flexDirection: 'column', gap: 8,
+    padding: '10px 12px',
+    paddingTop: 'max(10px, env(safe-area-inset-top))',
+    background: 'white',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+  },
+  topRow: {
+    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+  },
+  searchRow: {
+    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+  },
   logo: {
-    padding: '6px 14px', borderRadius: 8,
+    padding: '6px 12px', borderRadius: 8,
     background: '#1d4ed8', color: 'white',
     fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap',
   },
   tabInactive: {
-    padding: '6px 14px', borderRadius: 8,
+    padding: '6px 12px', borderRadius: 8,
     background: '#f3f4f6', color: '#374151',
     fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap',
     textDecoration: 'none',
   },
   searchInput: {
-    flex: 1, minWidth: 140, maxWidth: 240,
-    padding: '7px 12px', borderRadius: 8,
+    flex: 1, minWidth: 0,
+    padding: '9px 12px', borderRadius: 8,
     border: '1px solid #d1d5db', fontSize: 14, outline: 'none',
   },
   select: {
-    padding: '7px 10px', borderRadius: 8,
+    flexShrink: 0,
+    padding: '9px 8px', borderRadius: 8,
     border: '1px solid #d1d5db', fontSize: 14,
     background: 'white', cursor: 'pointer', outline: 'none',
   },
   countBadge: {
     fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap',
     background: '#f3f4f6', padding: '4px 10px', borderRadius: 20,
+    marginLeft: 'auto', flexShrink: 0,
   },
   legend: {
     position: 'absolute', bottom: 36, left: 12, zIndex: 10,
@@ -502,11 +620,26 @@ const styles = {
     whiteSpace: 'nowrap',
   },
   panel: {
-    position: 'absolute', top: 52, right: 0, bottom: 0,
-    width: 'min(340px, 100vw)',
+    position: 'absolute', top: 100, right: 0, bottom: 0,
+    width: 'min(360px, 100vw)',
     background: 'white', zIndex: 20,
     boxShadow: '-4px 0 20px rgba(0,0,0,0.12)',
-    overflowY: 'auto', padding: 20,
+    overflowY: 'auto', padding: '16px 20px 20px',
+  },
+  panelMobile: {
+    position: 'fixed', bottom: 0, left: 0, right: 0,
+    maxHeight: '60vh', zIndex: 20,
+    background: 'white',
+    borderRadius: '20px 20px 0 0',
+    boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+    overflowY: 'auto',
+    padding: '8px 16px',
+    paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+  },
+  dragHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    background: '#d1d5db',
+    margin: '0 auto 12px', flexShrink: 0,
   },
   closeBtn: {
     position: 'absolute', top: 12, right: 12,
@@ -553,4 +686,16 @@ const styles = {
   },
   forecastTime: { fontSize: 11, fontWeight: 600, color: '#3b82f6' },
   forecastTemp: { fontSize: 13, fontWeight: 700, color: '#1e3a8a' },
+  mySchoolBtn: {
+    display: 'block', width: '100%', marginBottom: 12,
+    padding: '8px 0', borderRadius: 8, border: '1.5px solid #d97706',
+    background: '#fffbeb', color: '#92400e', fontWeight: 600, fontSize: 13,
+    cursor: 'pointer', textAlign: 'center',
+  },
+  mySchoolBtnActive: {
+    display: 'block', width: '100%', marginBottom: 12,
+    padding: '8px 0', borderRadius: 8, border: 'none',
+    background: '#f59e0b', color: 'white', fontWeight: 700, fontSize: 13,
+    cursor: 'pointer', textAlign: 'center',
+  },
 };

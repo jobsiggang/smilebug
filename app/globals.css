@@ -1,0 +1,27 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  /* 모바일 과도한 확대 방지 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* 풀스크린 웹뷰 */
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+/* 카카오맵 터치 스크롤 허용 */
+.kakao-map-container {
+  touch-action: pan-x pan-y;
+}
+
+/* 모바일 탭 하이라이트 제거 */
+button, a, select, input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 스크롤바 얇게 (패널 내부) */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }

@@ -1,3 +1,5 @@
+import './globals.css';
+
 export const metadata = {
   title: '전국 학교 지도',
   description: '전국 고등학교·대학교 위치 및 급식 정보 지도 서비스',
@@ -8,7 +10,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="ko">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
