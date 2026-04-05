@@ -277,6 +277,9 @@ export default function SchoolMapPage() {
             )}
           </div>
 
+          {/* 날씨 + 예보 */}
+          <WeatherSection weather={selectedSchool.weather} forecast={selectedSchool.forecast} />
+
           {/* 급식 */}
           <div style={styles.mealBox}>
             <div style={styles.mealHeader}>
@@ -301,6 +304,92 @@ export default function SchoolMapPage() {
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 날씨 섹션 (실황 + 예보) ─────────────────────────────────────────────────
+// 실황(getUltraSrtNcst): T1H, PTY, REH, RN1, WSD  (SKY 없음)
+// 예보(getUltraSrtFcst): T1H, SKY, PTY, REH, RN1, WSD
+const SKY_ICON  = { 1: '☀️', 3: '⛅', 4: '☁️' };
+const PTY_LABEL = { 0: '맑음', 1: '비', 2: '비/눈', 3: '눈', 4: '소나기', 5: '빗방울', 6: '진눈깨비', 7: '눈날림' };
+const PTY_ICON  = { 0: null, 1: '🌧️', 2: '🌨️', 3: '❄️', 4: '🌦️', 5: '🌧️', 6: '🌨️', 7: '🌨️' };
+
+function getWeatherIcon(sky, pty) {
+  if (pty != null && pty > 0) return PTY_ICON[pty] ?? '🌧️';
+  return SKY_ICON[sky] ?? '☀️';
+}
+
+function WeatherSection({ weather, forecast }) {
+  // 현재 시각(KST) 이후의 예보만 필터링
+  const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
+  const kstDate = kstNow.toISOString().split('T')[0].replace(/-/g, '');
+  const kstHHMM = String(kstNow.getUTCHours()).padStart(2, '0') + '00';
+  const futureFc = (forecast ?? []).filter(
+    (f) => f.fcstDate > kstDate || (f.fcstDate === kstDate && f.fcstTime > kstHHMM)
+  ).slice(0, 6);
+
+  // 현재 아이콘: 예보의 첫 항목 SKY + 실황 PTY
+  const nearestSky = futureFc[0]?.SKY;
+  const curPty = weather?.PTY ?? futureFc[0]?.PTY ?? 0;
+  const curIcon = getWeatherIcon(nearestSky, curPty);
+  const curLabel = curPty > 0 ? (PTY_LABEL[curPty] ?? '') : (nearestSky ? (PTY_LABEL[0]) : '맑음');
+
+  if (!weather && !futureFc.length) return null;
+
+  return (
+    <div style={styles.weatherBox}>
+      <div style={styles.weatherHeader}>
+        <span style={{ fontSize: 18 }}>🌡️</span>
+        <span style={styles.weatherTitle}>현재 날씨</span>
+      </div>
+
+      {/* 현재 실황 */}
+      {weather && (
+        <div style={styles.weatherGrid}>
+          <div style={styles.weatherItem}>
+            <span style={{ fontSize: 22 }}>{curIcon}</span>
+            <span style={styles.weatherVal}>{curLabel}</span>
+            <span style={styles.weatherKey}>날씨</span>
+          </div>
+          <div style={styles.weatherItem}>
+            <span style={{ fontSize: 22 }}>🌡️</span>
+            <span style={styles.weatherVal}>{weather.T1H != null ? `${weather.T1H}°C` : '-'}</span>
+            <span style={styles.weatherKey}>기온</span>
+          </div>
+          <div style={styles.weatherItem}>
+            <span style={{ fontSize: 22 }}>💧</span>
+            <span style={styles.weatherVal}>{weather.REH != null ? `${weather.REH}%` : '-'}</span>
+            <span style={styles.weatherKey}>습도</span>
+          </div>
+          <div style={styles.weatherItem}>
+            <span style={{ fontSize: 22 }}>🌂</span>
+            <span style={styles.weatherVal}>{weather.RN1 != null ? `${weather.RN1}mm` : '-'}</span>
+            <span style={styles.weatherKey}>강수</span>
+          </div>
+          <div style={styles.weatherItem}>
+            <span style={{ fontSize: 22 }}>💨</span>
+            <span style={styles.weatherVal}>{weather.WSD != null ? `${weather.WSD}m/s` : '-'}</span>
+            <span style={styles.weatherKey}>풍속</span>
+          </div>
+        </div>
+      )}
+
+      {/* 6시간 예보 스트립 */}
+      {futureFc.length > 0 && (
+        <>
+          <div style={styles.forecastLabel}>6시간 예보</div>
+          <div style={styles.forecastRow}>
+            {futureFc.map((f) => (
+              <div key={f.fcstDate + f.fcstTime} style={styles.forecastItem}>
+                <span style={styles.forecastTime}>{f.fcstTime.slice(0, 2)}시</span>
+                <span style={{ fontSize: 20 }}>{getWeatherIcon(f.SKY, f.PTY)}</span>
+                <span style={styles.forecastTemp}>{f.T1H != null ? `${f.T1H}°` : '-'}</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -417,4 +506,28 @@ const styles = {
   menuList:  { margin: 0, padding: 0, listStyle: 'none' },
   menuItem:  { fontSize: 13, color: '#78350f', lineHeight: 1.9 },
   noMeal:    { fontSize: 13, color: '#a16207', fontStyle: 'italic', margin: 0 },
+  weatherBox: {
+    marginTop: 16, borderRadius: 12,
+    background: 'linear-gradient(135deg,#eff6ff,#dbeafe)',
+    padding: '14px 16px',
+  },
+  weatherHeader: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
+  weatherTitle: { fontWeight: 700, fontSize: 15, color: '#1e40af' },
+  weatherGrid: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 },
+  weatherItem: {
+    flex: '1 1 52px', minWidth: 52,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+    background: 'rgba(255,255,255,0.7)', borderRadius: 8, padding: '8px 4px',
+  },
+  weatherVal: { fontSize: 13, fontWeight: 700, color: '#1e3a8a' },
+  weatherKey: { fontSize: 11, color: '#3b82f6' },
+  forecastLabel: { fontSize: 11, fontWeight: 700, color: '#3b82f6', marginTop: 10, marginBottom: 6 },
+  forecastRow: { display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 },
+  forecastItem: {
+    minWidth: 48, flexShrink: 0,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+    background: 'rgba(255,255,255,0.75)', borderRadius: 8, padding: '6px 4px',
+  },
+  forecastTime: { fontSize: 11, fontWeight: 600, color: '#3b82f6' },
+  forecastTemp: { fontSize: 13, fontWeight: 700, color: '#1e3a8a' },
 };
