@@ -47,6 +47,8 @@ export default function SchoolMapPage() {
   const [totalCount, setTotalCount]       = useState(0);
   const [isLoading, setIsLoading]         = useState(true);
   const [loadError, setLoadError]         = useState(null);
+  const [weatherData, setWeatherData]     = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   // ── 1) 카카오맵 SDK 로드 + 학교 데이터 fetch 병렬 처리 ──────────────────
   useEffect(() => {
@@ -143,7 +145,23 @@ export default function SchoolMapPage() {
     return markers.length;
   }
 
-  // ── 4) 검색·필터 변경 시 마커 재렌더링 ──────────────────────────────────
+  // ── 4) 학교 선택 시 날씨 on-demand fetch ───────────────────────────────
+  useEffect(() => {
+    if (!selectedSchool?.nx || !selectedSchool?.ny) {
+      setWeatherData(null);
+      return;
+    }
+    let cancelled = false;
+    setWeatherData(null);
+    setWeatherLoading(true);
+    fetch(`/api/weather?nx=${selectedSchool.nx}&ny=${selectedSchool.ny}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (!cancelled) { setWeatherData(data); setWeatherLoading(false); } })
+      .catch(() => { if (!cancelled) setWeatherLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedSchool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 5) 검색·필터 변경 시 마커 재렌더링 ──────────────────────────────────
   useEffect(() => {
     if (!mapsReady) return;
 
@@ -278,7 +296,7 @@ export default function SchoolMapPage() {
           </div>
 
           {/* 날씨 + 예보 */}
-          <WeatherSection weather={selectedSchool.weather} forecast={selectedSchool.forecast} />
+          <WeatherSection weather={weatherData?.current} forecast={weatherData?.forecast} loading={weatherLoading} />
 
           {/* 급식 */}
           <div style={styles.mealBox}>
@@ -321,7 +339,7 @@ function getWeatherIcon(sky, pty) {
   return SKY_ICON[sky] ?? '☀️';
 }
 
-function WeatherSection({ weather, forecast }) {
+function WeatherSection({ weather, forecast, loading }) {
   // 현재 시각(KST) 이후의 예보만 필터링
   const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
   const kstDate = kstNow.toISOString().split('T')[0].replace(/-/g, '');
@@ -336,6 +354,11 @@ function WeatherSection({ weather, forecast }) {
   const curIcon = getWeatherIcon(nearestSky, curPty);
   const curLabel = curPty > 0 ? (PTY_LABEL[curPty] ?? '') : (nearestSky ? (PTY_LABEL[0]) : '맑음');
 
+  if (loading) return (
+    <div style={{ ...styles.weatherBox, color: '#6b7280', fontSize: 13, textAlign: 'center', padding: '14px 0' }}>
+      날씨 불러오는 중…
+    </div>
+  );
   if (!weather && !futureFc.length) return null;
 
   return (

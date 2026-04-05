@@ -3,14 +3,7 @@
     {
       "path": "/api/cron/update-meals",
       "schedule": "0 17 * * *"
-    },
-    {
-      "path": "/api/cron/update-weather",
-      "schedule": "5 * * * *"
-    },
-    {
-      "path": "/api/cron/update-forecast",
-      "schedule": "5 */6 * * *"
+
     }
   ]
 }
